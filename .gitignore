@@ -1,0 +1,8 @@
+node_modules/
+.env*.local
+.env
+tmp/
+dist/
+.DS_Store
+/build/
+/out/
