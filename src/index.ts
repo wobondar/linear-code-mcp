@@ -21,6 +21,11 @@ if (!(await sdlFile.exists())) {
 }
 
 const createServer = prepare(config, await sdlFile.text());
-log(`ready: ${config.allowMutations ? "mutations enabled" : "read-only"}, truncate ${config.truncate ? "on" : "off"}, timeout ${config.timeoutMs} ms`);
+const fsMode = [
+  config.fs.read ? `read${config.fs.readOutsideCwd ? " anywhere" : ""}` : "",
+  config.fs.write ? `write${config.fs.writeOutsideCwd ? " anywhere" : ""}` : "",
+].filter(Boolean).join("+") || "off";
+log(`ready: ${config.allowMutations ? "mutations enabled" : "read-only"}, truncate ${config.truncate ? "on" : "off"}, timeout ${config.timeoutMs} ms, files ${fsMode}`);
+for (const flag of config.fs.ignoredFlags) log(`${flag} is set without its base flag and does nothing`);
 
 serveStdio(createServer, { onerror: (error) => log(`transport error: ${error.message}`) });

@@ -9,7 +9,7 @@ Read-only by default. Mutations are refused on the host before any request leave
 | Tool | What the agent's code gets | Network |
 |---|---|---|
 | `schema` | `schema.queries`, `schema.types` (and `schema.mutations` when enabled): the Linear SDL projected to plain objects, type references as SDL strings | none |
-| `execute` | `linear.request({ query, variables, allowPartial })`, which resolves to GraphQL `data` and throws on any error | Linear only, via the host |
+| `execute` | `linear.request({ query, variables, allowPartial })`, which resolves to GraphQL `data` and throws on any error. With the file flags set, `files.read(path)` and `files.write(path, text)` too | Linear only, via the host |
 
 Results over about 6,000 tokens are cut structurally so they stay valid JSON (Cloudflare's `truncate.ts`, Apache-2.0, see `LICENSE-cloudflare-mcp`).
 
@@ -40,13 +40,34 @@ For a project-level `.mcp.json`, or any other host that takes a JSON server bloc
 | `LINEAR_MCP_ALLOW_MUTATIONS` | unset | `true` lets `mutation` operations through and adds `schema.mutations`. Subscriptions are always refused |
 | `LINEAR_MCP_TRUNCATE` | `true` | `false` returns whole results |
 | `LINEAR_MCP_TIMEOUT_MS` | `30000` | Wall-clock budget per call; the worker is terminated when it expires |
+| `LINEAR_MCP_FS_READ` | unset | `true` adds `files.read(path)` for UTF-8 text under the server's working directory and the Claude Code scratchpad |
+| `LINEAR_MCP_FS_WRITE` | unset | `true` adds `files.write(path, text)` in the same places, resolving to the bytes written. It never overwrites, not even through a symlink, and never creates directories |
+| `LINEAR_MCP_FS_ALLOW_READ_OUTSIDE_CWD` | unset | `true` lifts the directory limit on reads. Needs `LINEAR_MCP_FS_READ` |
+| `LINEAR_MCP_FS_ALLOW_WRITE_OUTSIDE_CWD` | unset | `true` lifts the directory limit on writes. Needs `LINEAR_MCP_FS_WRITE` |
 | `LINEAR_API_URL` | `https://api.linear.app/graphql` | |
+
+## Files
+
+The point of code mode is that big payloads never pass through the model. A comment body that lives in a file, or a thousand issues the model wants to grep later, should go straight between disk and Linear:
+
+```js
+async () => {
+  const body = await files.read("/abs/path/docs/ENG-123-comment.md");
+  const { commentCreate } = await linear.request({
+    query: `mutation($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }`,
+    variables: { issueId: "...", body },
+  });
+  return commentCreate.success;
+}
+```
+
+Paths are absolute. Symlinks are resolved before the directory check, so a link inside the project pointing elsewhere counts as elsewhere. `.env*` files are refused on both sides whatever the flags say. The host does every read and write; the worker only ever sees the text.
 
 ## How a call runs
 
 1. The tool handler spawns a fresh Bun `Worker` from a blob URL with `env: {}` and `smol: true`.
 2. The agent's code is compiled with `new Function` whose parameters shadow `fetch`, `process`, `Bun`, `require`, `postMessage` and the other globals that reach outside the worker, then awaited.
-3. `linear.request()` posts to the host thread. The host parses the document with `graphql`, refuses anything that is not a `query` (or `mutation` when enabled), then fetches with the key. The key never enters the worker.
+3. `linear.request()` posts to the host thread. The host parses the document with `graphql`, refuses anything that is not a `query` (or `mutation` when enabled), then fetches with the key. The key never enters the worker. `files.read()` and `files.write()` take the same route; the worker has no file handles.
 4. The return value is JSON-serialised in the worker, truncated on the host, and sent back as text.
 5. The worker is terminated. A loop that never yields dies with the timer.
 

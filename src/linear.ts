@@ -30,7 +30,7 @@ interface GraphQLResponse {
   errors?: GraphQLError[];
 }
 
-const USER_AGENT = "linear-codemode-mcp/0.1";
+const USER_AGENT = "linear-codemode-mcp/0.2";
 
 export function createLinearClient(options: LinearClientOptions): LinearClient {
   const doFetch = options.fetch ?? fetch;

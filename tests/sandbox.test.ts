@@ -32,25 +32,43 @@ describe("runInSandbox", () => {
   it("bridges linear.request to the host handler", async () => {
     const seen: unknown[] = [];
     const result = await run('async () => linear.request({ query: "{ viewer { id } }", variables: { a: 1 } })', {
-      request: async (options) => {
-        seen.push(options);
-        return { viewer: { id: "u1" } };
+      handlers: {
+        "linear.request": async (options: unknown) => {
+          seen.push(options);
+          return { viewer: { id: "u1" } };
+        },
       },
     });
     expect(result).toEqual({ viewer: { id: "u1" } });
     expect(seen).toEqual([{ query: "{ viewer { id } }", variables: { a: 1 } }]);
   });
 
+  it("bridges files.read and files.write with their arguments in order", async () => {
+    const calls: unknown[][] = [];
+    const result = await run('async () => { await files.write("/p", "body"); return files.read("/q"); }', {
+      handlers: {
+        "files.write": async (...args: unknown[]) => { calls.push(args); },
+        "files.read": async (...args: unknown[]) => { calls.push(args); return "contents"; },
+      },
+    });
+    expect(result).toBe("contents");
+    expect(calls).toEqual([["/p", "body"], ["/q"]]);
+  });
+
   it("turns a host-side request error into a catchable error in the sandbox", async () => {
     const result = await run(
       'async () => { try { await linear.request({ query: "x" }); return "no"; } catch (e) { return e.message; } }',
-      { request: async () => { throw new Error("refused by guard"); } },
+      { handlers: { "linear.request": async () => { throw new Error("refused by guard"); } } },
     );
     expect(result).toBe("refused by guard");
   });
 
-  it("has no linear object in the schema tool", async () => {
-    expect(await run("async () => typeof linear", { kind: "schema" })).toBe("undefined");
+  it("names the missing API when no handler is registered", async () => {
+    await expect(run('async () => files.read("/x")', { handlers: {} })).rejects.toThrow("files.read() is not available in this tool");
+  });
+
+  it("has no linear or files object in the schema tool", async () => {
+    expect(await run("async () => [typeof linear, typeof files]", { kind: "schema" })).toEqual(["undefined", "undefined"]);
   });
 
   it("hands the schema tool a parsed schema", async () => {
