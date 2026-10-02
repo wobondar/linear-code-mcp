@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "linear-code": {
+      "command": "bun",
+      "args": [
+        "--env-file=/ABS/PATH/linear-codemode-mcp/.env.local",
+        "/ABS/PATH/linear-codemode-mcp/src/index.ts"
+      ]
+    }
+  }
+}

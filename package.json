@@ -1,0 +1,28 @@
+{
+  "name": "linear-codemode-mcp",
+  "version": "0.1.0",
+  "description": "Code-mode MCP server for the Linear GraphQL API: two tools, local, read-only by default",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "linear-codemode-mcp": "src/index.ts"
+  },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p .",
+    "update-schema": "bun scripts/update-schema.ts",
+    "postinstall": "bun scripts/update-schema.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.2.0",
+    "graphql": "^17.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.2.0",
+    "@types/bun": "latest",
+    "typescript": "^7.0.2"
+  }
+}
